@@ -6,6 +6,26 @@ import torch
 from PIL import Image
 
 
+def retrieve_sd3(io, unconditional: bool = False):
+    if isinstance(io, tuple):
+        if len(io) <= 2:
+            io = io[0].detach().cpu()
+            io_uncond, io_cond = io.chunk(2)
+            if unconditional:
+                return io_uncond
+            return io_cond
+        else:
+            raise ValueError("A tuple should have length of 1 or 2")
+    elif isinstance(io, torch.Tensor):
+        io = io.detach().cpu()
+        io_uncond, io_cond = io.chunk(2)
+        if unconditional:
+            return io_uncond
+        return io_cond
+    else:
+        raise ValueError("Input/Output must be a tensor, or 1/2-element tuple")
+
+
 def retrieve(io, unconditional: bool = False):
     if isinstance(io, tuple):
         if len(io) == 1:

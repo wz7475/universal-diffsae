@@ -11,12 +11,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 from accelerate import Accelerator
 from diffusers import DiffusionPipeline
 
-import src.hooked_model.scheduler
-from src.hooked_model.hooked_model import HookedDiffusionModel
-from src.hooked_model.utils import (
-    get_timesteps,
-)
-from src.sae.cache_activations_runner import CacheActivationsRunner
+from src.hooked_model.hooked_model_sd3 import HookedDiffusionModel
+from src.sae.cache_activations_runner_sd3 import CacheActivationsRunner
 from src.sae.config import CacheActivationsRunnerConfig
 
 
@@ -25,17 +21,18 @@ def run():
     accelerator = Accelerator()
     # define model
     pipe = DiffusionPipeline.from_pretrained(
-        args.model_name, torch_dtype=args.dtype, use_safetensors=True, vae=None
+        args.model_name,
+        torch_dtype=args.dtype,
+        text_encoder_3=None,
+        tokenizer_3=None,
+        vae=None,
     ).to(accelerator.device)
-    model = pipe.unet
-    scheduler = src.hooked_model.scheduler.DDIMScheduler.from_config(
-        pipe.scheduler.config
-    )
+    model = pipe.transformer
+    scheduler = pipe.scheduler
     hooked_model = HookedDiffusionModel(
         model=model,
         scheduler=scheduler,
         encode_prompt=pipe.encode_prompt,
-        get_timesteps=get_timesteps,
         vae=pipe.vae,
     )
 

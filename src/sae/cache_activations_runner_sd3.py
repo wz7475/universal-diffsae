@@ -11,13 +11,13 @@ from diffusers.utils.import_utils import is_xformers_available
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 import torch
 from accelerate.utils import gather_object
-from datasets import Array2D, Dataset, Features, Value, load_dataset
+from datasets import Array2D, Dataset, Features, Value
 from datasets.fingerprint import generate_fingerprint
 from huggingface_hub import HfApi
 from tqdm import tqdm
 
-from src.hooked_model.hooked_model import HookedDiffusionModel
 from src.sae.config import CacheActivationsRunnerConfig
+from UnlearnCanvas_resources.const import class_available
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch._inductor.config.conv_1x1_as_mm = True
@@ -29,12 +29,7 @@ TORCH_STRING_DTYPE_MAP = {torch.float16: "float16", torch.float32: "float32"}
 
 
 class CacheActivationsRunner:
-    def __init__(
-        self,
-        cfg: CacheActivationsRunnerConfig,
-        model: HookedDiffusionModel,
-        accelerator,
-    ):
+    def __init__(self, cfg: CacheActivationsRunnerConfig, model, accelerator):
         self.cfg = cfg
         self.accelerator = accelerator
         self.model = model
@@ -44,22 +39,28 @@ class CacheActivationsRunner:
                 print("Enabling xFormers memory efficient attention")
                 self.model.model.enable_xformers_memory_efficient_attention()
             self.model.model.to(self.accelerator.device)
-            self.model.vae.to("cpu")
             self.features_dict = {hookpoint: None for hookpoint in self.cfg.hook_names}
-            self.scheduler_timesteps = self.model.get_timesteps(
-                self.cfg.num_inference_steps,
-                self.model.scheduler.config.num_train_timesteps,
-                self.model.scheduler.config.timestep_spacing,
-                self.model.scheduler.config.steps_offset,
-                self.accelerator.device,
-            )
+            self.scheduler = self.model.scheduler
 
-            self.dataset = load_dataset(
-                self.cfg.dataset_name,
-                split=self.cfg.split,
-                columns=[self.cfg.column],
-            )
+            # Prepare timesteps
+            self.scheduler.set_timesteps(self.cfg.num_inference_steps, device="cpu")
+            self.scheduler_timesteps = self.scheduler.timesteps
 
+            all_prompts = []
+            for class_avail in class_available:
+                with open(
+                    os.path.join(
+                        "UnlearnCanvas_resources/anchor_prompts/finetune_prompts",
+                        f"sd_prompt_{class_avail}.txt",
+                    ),
+                    "r",
+                ) as prompt_file:
+                    if self.accelerator.is_main_process:
+                        print(f"Preparing prompts for class {class_avail}")
+                    for prompt in prompt_file:
+                        prompt = prompt.strip()
+                        all_prompts.append(prompt)
+            self.dataset = Dataset.from_dict({"caption": all_prompts})
             self.dataset = self.dataset.shuffle(self.cfg.seed)
             if limit := self.cfg.max_num_examples:
                 self.dataset = self.dataset.select(range(limit))
@@ -284,6 +285,7 @@ class CacheActivationsRunner:
                     num_inference_steps=self.cfg.num_inference_steps,
                     positions_to_cache=self.cfg.hook_names,
                     guidance_scale=self.cfg.guidance_scale,
+                    device=self.accelerator.device,
                 )
 
             self.accelerator.wait_for_everyone()

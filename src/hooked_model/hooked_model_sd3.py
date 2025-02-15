@@ -4,7 +4,7 @@ from typing import Callable, Dict, List, Optional, Union
 
 import torch
 
-from src.hooked_model.utils import locate_block, postprocess_image, retrieve
+from src.hooked_model.utils import locate_block, postprocess_image, retrieve_sd3
 
 
 def flush():
@@ -361,8 +361,7 @@ class HookedDiffusionModel:
             if cache_input is not None:
                 if position not in cache_input:
                     cache_input[position] = []
-                print(input)
-                input_to_cache = retrieve(input, unconditional)
+                input_to_cache = retrieve_sd3(input, unconditional)
                 if len(input_to_cache.shape) == 4:
                     input_to_cache = input_to_cache.view(
                         input_to_cache.shape[0], input_to_cache.shape[1], -1
@@ -372,7 +371,7 @@ class HookedDiffusionModel:
             if cache_output is not None:
                 if position not in cache_output:
                     cache_output[position] = []
-                output_to_cache = retrieve(output, unconditional)
+                output_to_cache = retrieve_sd3(output, unconditional)
                 if len(output_to_cache.shape) == 4:
                     output_to_cache = output_to_cache.view(
                         output_to_cache.shape[0], output_to_cache.shape[1], -1
