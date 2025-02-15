@@ -7,7 +7,7 @@ import sys
 from contextlib import nullcontext, redirect_stdout
 from dataclasses import dataclass
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 import torch
 import torch.distributed as dist
 from datasets import Dataset, concatenate_datasets
