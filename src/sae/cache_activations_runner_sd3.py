@@ -219,7 +219,7 @@ class CacheActivationsRunner:
 
         shard = Dataset.from_dict(
             {
-                "activations": activations,
+                "values": activations,
                 "timestep": timesteps,
             },
             features=self.features_dict[hook_name],
@@ -229,7 +229,7 @@ class CacheActivationsRunner:
     def create_dataset_feature(self, hook_name, d_in, d_out):
         self.features_dict[hook_name] = Features(
             {
-                "activations": Array2D(
+                "values": Array2D(
                     shape=(
                         d_in,
                         d_out,

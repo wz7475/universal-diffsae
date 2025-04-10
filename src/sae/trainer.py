@@ -26,12 +26,12 @@ class SaeTrainer:
         self.dataset_dict = dataset_dict
         self.num_examples = len(dataset_dict[list(dataset_dict.keys())[0]])
         input_widths = {
-            hook: dataset[0]["activations"].shape[-1]
+            hook: dataset[0]["values"].shape[-1]
             for hook, dataset in self.dataset_dict.items()
         }
         self.sample_size = dataset_dict[list(dataset_dict.keys())[0]][0][
-            "activations"
-        ].shape[-2]
+            "values"
+        ].shape[-1]
         self.distribute_modules()
         device = torch.device(cfg.device)
 
@@ -192,7 +192,7 @@ class SaeTrainer:
                 hidden_dict = {}
                 start_loading = time()
                 for hook, batch in zip(dataloaders.keys(), batch_dict):
-                    hidden_dict[hook] = batch["activations"]
+                    hidden_dict[hook] = batch["values"]
                 data_loading_time = time() - start_loading
 
                 # Bookkeeping for dead feature detection

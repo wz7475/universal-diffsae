@@ -53,7 +53,7 @@ def load_datasets_from_dirs(base_dirs, hookpoint, dtype=torch.float32):
         # Set format for each dataset
         dataset.set_format(
             type="torch",
-            columns=["activations", "timestep"],
+            columns=["values"],
             dtype=dtype,
         )
 
@@ -77,7 +77,7 @@ def run():
 
     args = parse(RunConfig)
     # add output_or_diff to the run name
-    args.run_name = args.run_name + f"_{args.dataset_path[0].split('/')[-2]}"
+    args.run_name = args.run_name + f"_{args.dataset_path[0].split('/')[-1]}"
 
     dtype = torch.float32
     if args.mixed_precision == "fp16":
@@ -98,7 +98,7 @@ def run():
                 )
             dataset.set_format(
                 type="torch",
-                columns=["activations", "timestep"],
+                columns=["values"],
                 dtype=dtype,
             )
             dataset = dataset.shuffle(args.seed)
@@ -116,7 +116,7 @@ def run():
                 )
                 dataset.set_format(
                     type="torch",
-                    columns=["activations", "timestep"],
+                    columns=["values", "timestep"],
                     dtype=dtype,
                 )
                 dataset = dataset.shuffle(args.seed)

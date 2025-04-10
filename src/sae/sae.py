@@ -285,6 +285,7 @@ class Sae(nn.Module):
 
     def forward(self, x: Tensor, dead_mask: Tensor | None = None) -> ForwardOutput:
         # x shape: [bs, sample_size, d_in]
+        x = x.unsqueeze(1)
         batch_size, sample_size, emb_size = x.shape
         x, x_mean, x_std = self.preprocess_input(x)
         pre_acts = self.pre_acts(x)  # [bs * sample_size, num_latents]
