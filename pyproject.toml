@@ -1,0 +1,20 @@
+[project]
+name = "universal-diffsae"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "Wojtek Zarzecki", email = "wojtek.zarzecki2002@gmail.com"},
+]
+
+requires-python = ">=3.9"
+readme = "README.md"
+license = {text = "MIT"}
+dependencies = ["torch>=2.6.0", "datasets>=3.5.0", "simple-parsing>=0.1.7", "accelerate>=1.6.0", "transformers>=4.51.3", "tqdm>=4.67.1", "matplotlib>=3.9.4", "psutil>=7.0.0"]
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+
+[tool.pdm]
+distribution = true

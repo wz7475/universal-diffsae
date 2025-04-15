@@ -1,12 +1,9 @@
 import json
-from fnmatch import fnmatch
 from pathlib import Path
 from typing import NamedTuple
 
 import einops
 import torch
-from huggingface_hub import snapshot_download
-from natsort import natsorted
 from safetensors.torch import load_model, save_model
 from torch import Tensor, nn
 
@@ -80,63 +77,7 @@ class Sae(nn.Module):
 
         self.b_dec = nn.Parameter(torch.zeros(d_in, dtype=dtype, device=device))
 
-    @staticmethod
-    def load_many(
-        name: str,
-        local: bool = False,
-        layers: list[str] | None = None,
-        device: str | torch.device = "cpu",
-        *,
-        decoder: bool = True,
-        pattern: str | None = None,
-    ) -> dict[str, "Sae"]:
-        """Load SAEs for multiple hookpoints on a single model and dataset."""
-        pattern = pattern + "/*" if pattern is not None else None
-        if local:
-            repo_path = Path(name)
-        else:
-            repo_path = Path(snapshot_download(name, allow_patterns=pattern))
 
-        if layers is not None:
-            return {
-                layer: Sae.load_from_disk(
-                    repo_path / layer, device=device, decoder=decoder
-                )
-                for layer in natsorted(layers)
-            }
-        files = [
-            f
-            for f in repo_path.iterdir()
-            if f.is_dir() and (pattern is None or fnmatch(f.name, pattern))
-        ]
-        return {
-            f.name: Sae.load_from_disk(f, device=device, decoder=decoder)
-            for f in natsorted(files, key=lambda f: f.name)
-        }
-
-    @staticmethod
-    def load_from_hub(
-        name: str,
-        hookpoint: str | None = None,
-        device: str | torch.device = "cpu",
-        *,
-        decoder: bool = True,
-    ) -> "Sae":
-        # Download from the HuggingFace Hub
-        repo_path = Path(
-            snapshot_download(
-                name,
-                allow_patterns=f"{hookpoint}/*" if hookpoint is not None else None,
-            )
-        )
-        if hookpoint is not None:
-            repo_path = repo_path / hookpoint
-
-        # No layer specified, and there are multiple layers
-        elif not repo_path.joinpath("cfg.json").exists():
-            raise FileNotFoundError("No config file found; try specifying a layer.")
-
-        return Sae.load_from_disk(repo_path, device=device, decoder=decoder)
 
     @staticmethod
     def load_from_disk(

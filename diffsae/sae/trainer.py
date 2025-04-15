@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from transformers import get_scheduler
 
-from src.sae.utils import geometric_median
+from diffsae.sae.utils import geometric_median
 
 from .config import TrainConfig
 from .sae import Sae
@@ -512,7 +512,7 @@ class SaeTrainer:
     def scatter_hiddens(self, hidden_dict: dict[str, Tensor]) -> dict[str, Tensor]:
         """Scatter & gather the hidden states across ranks."""
         outputs = [
-            # Add a new leading "layer" dimension to each tensor
+            # Add a new leading "layer" dimension to each te
             torch.stack([hidden_dict[hook] for hook in hookpoints], dim=1)
             for hookpoints in self.module_plan
         ]

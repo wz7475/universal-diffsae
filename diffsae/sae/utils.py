@@ -3,9 +3,7 @@ import os
 from typing import Any, Type, TypeVar, cast
 
 import torch
-from accelerate.utils import send_to_device
-from torch import Tensor, nn
-from transformers import PreTrainedModel
+from torch import Tensor
 
 T = TypeVar("T")
 

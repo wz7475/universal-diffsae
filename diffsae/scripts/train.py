@@ -13,8 +13,8 @@ import torch.distributed as dist
 from datasets import Dataset, concatenate_datasets
 from simple_parsing import parse
 
-from src.sae.config import TrainConfig
-from src.sae.trainer import SaeTrainer
+from diffsae.sae.config import TrainConfig
+from diffsae.sae.trainer import SaeTrainer
 
 
 @dataclass
@@ -62,6 +62,41 @@ def load_datasets_from_dirs(base_dirs, hookpoint, dtype=torch.float32):
     # Concatenate all datasets
     return concatenate_datasets(datasets)
 
+def load_datasets_from_dir_of_dirs(base_dir, hookpoint, dtype=torch.float32):
+    """
+    Load and concatenate datasets from multiple directories.
+
+    Args:
+        base_dirs (list[str]): List of base directory paths containing the datasets
+        hookpoint (str): Name of the hookpoint directory
+        dtype: Data type for the tensors (default: torch.float32)
+
+    Returns:
+        Dataset: Concatenated dataset
+    """
+    datasets = []
+    print(f"Concatenating datasets from {base_dir}")
+
+    all_directories = os.listdir(base_dir)
+    idx = 1
+    for dirname in all_directories:
+        target_dir = os.path.join(base_dir, dirname)
+        dataset = Dataset.load_from_disk(
+            os.path.join(target_dir, hookpoint), keep_in_memory=False
+        )
+
+        # Set format for each dataset
+        dataset.set_format(
+            type="torch",
+            columns=["values"],
+            dtype=dtype,
+        )
+
+        datasets.append(dataset)
+        print(f"processed {idx}/{len(all_directories)} {target_dir}")
+        idx += 1
+    # Concatenate all datasets
+    return concatenate_datasets(datasets)
 
 def run():
     local_rank = os.environ.get("LOCAL_RANK")
@@ -77,7 +112,7 @@ def run():
 
     args = parse(RunConfig)
     # add output_or_diff to the run name
-    args.run_name = args.run_name + f"_{args.dataset_path[0].split('/')[-1]}"
+    args.run_name = args.run_name + "".join(args.dataset_path[0].split("/"))
 
     dtype = torch.float32
     if args.mixed_precision == "fp16":
@@ -90,12 +125,13 @@ def run():
     dataset_dict = {}
     if not ddp or rank == 0:
         for hookpoint in args.hookpoints:
-            if len(args.dataset_path) > 1:
-                dataset = load_datasets_from_dirs(args.dataset_path, hookpoint, dtype)
-            else:
-                dataset = Dataset.load_from_disk(
-                    os.path.join(args.dataset_path[0], hookpoint), keep_in_memory=False
-                )
+            # if len(args.dataset_path) > 1:
+            #     dataset = load_datasets_from_dirs(args.dataset_path, hookpoint, dtype)
+            # else:
+            #     dataset = Dataset.load_from_disk(
+            #         os.path.join(args.dataset_path[0], hookpoint), keep_in_memory=False
+            #     )
+            dataset = load_datasets_from_dir_of_dirs(args.dataset_path[0], hookpoint, dtype)
             dataset.set_format(
                 type="torch",
                 columns=["values"],
