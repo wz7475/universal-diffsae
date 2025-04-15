@@ -93,7 +93,7 @@ class TrainConfig(Serializable):
     log_to_wandb: bool = True
     run_name: str | None = None
     wandb_log_frequency: int = 1
-    wandb_project: str = "sae_stable-diffusion-v1-4"
+    wandb_project: str = "RFDiffSAE"
 
     def __post_init__(self):
         if self.run_name is None:
