@@ -119,7 +119,7 @@ class SaeTrainer:
         for name, sae in self.saes.items():
             load_model(sae, f"{path}/{name}/sae.safetensors", device=str(device))
 
-    def fit(self):
+    def fit(self, max_trainer_steps: int | None = None):
         # Use Tensor Cores even for fp32 matmuls
         torch.set_float32_matmul_precision("high")
 
@@ -133,6 +133,7 @@ class SaeTrainer:
                 wandb.init(
                     name=self.cfg.run_name,
                     project=self.cfg.wandb_project,
+                    entity=self.cfg.wandb_team,
                     config=asdict(self.cfg),
                     save_code=True,
                 )
@@ -186,9 +187,13 @@ class SaeTrainer:
 
         # Initialize disk I/O stats
         self.initial_disk_io = psutil.disk_io_counters()
-
+        step = 0
         for _ in range(self.cfg.num_epochs):
             for batch_dict in zip(*dataloaders.values()):
+                step += 1
+                if max_trainer_steps:
+                    if step >= max_trainer_steps:
+                        break
                 hidden_dict = {}
                 start_loading = time()
                 for hook, batch in zip(dataloaders.keys(), batch_dict):

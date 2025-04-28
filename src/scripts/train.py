@@ -7,6 +7,7 @@ import random
 import sys
 from contextlib import nullcontext, redirect_stdout
 from dataclasses import dataclass
+from typing import Optional
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 import torch
@@ -29,9 +30,11 @@ class RunConfig(TrainConfig):
     """Random seed for shuffling the dataset."""
     device: str = "cuda"
     num_epochs: int = 1
+    n_random_activation: Optional[int] = None
+    max_trainer_steps: Optional[int] = None
 
 
-def load_datasets_from_dir_of_dirs(base_dir, hookpoint, dtype=torch.float32):
+def load_datasets_from_dir_of_dirs(base_dir, dtype=torch.float32, random_n_activations_from_dataset= None):
     """
     Load and concatenate datasets from multiple directories.
 
@@ -39,6 +42,7 @@ def load_datasets_from_dir_of_dirs(base_dir, hookpoint, dtype=torch.float32):
         base_dirs (list[str]): List of base directory paths containing the datasets
         hookpoint (str): Name of the hookpoint directory
         dtype: Data type for the tensors (default: torch.float32)
+        random_n_activations_from_dataset (int | None): sample n random activation from dataset
 
     Returns:
         Dataset: Concatenated dataset
@@ -48,23 +52,25 @@ def load_datasets_from_dir_of_dirs(base_dir, hookpoint, dtype=torch.float32):
 
     all_directories = os.listdir(base_dir)
     idx = 1
-    for dirname in all_directories:
-        target_dir = os.path.join(base_dir, dirname)
-        dataset = Dataset.load_from_disk(
-            os.path.join(target_dir, hookpoint), keep_in_memory=False
-        )
+    for timestep_dir_name in sorted(all_directories):
+        timestrep_dir = os.path.join(base_dir, timestep_dir_name)
+        for design_der_name in os.listdir(timestrep_dir):
+            design_dir = os.path.join(timestrep_dir, design_der_name)
+            dataset = Dataset.load_from_disk(
+               design_dir, keep_in_memory=False
+            )
 
-        # Set format for each dataset
-        dataset.set_format(
-            type="torch",
-            columns=["values"],
-            dtype=dtype,
-        )
-        # dataset = dataset.select(range(min(1000, len(dataset))))
-        dataset = dataset.select(random.sample(range(0, len(dataset)), 100))
-        datasets.append(dataset)
-        print(f"processed {idx}/{len(all_directories)} {target_dir}")
-        idx += 1
+            # Set format for each dataset
+            dataset.set_format(
+                type="torch",
+                columns=["values"],
+                dtype=dtype,
+            )
+            # dataset = dataset.select(range(min(1000, len(dataset))))
+            if random_n_activations_from_dataset:
+                dataset = dataset.select(random.sample(range(0, len(dataset)), random_n_activations_from_dataset))
+            datasets.append(dataset)
+        print(f"processed {timestrep_dir}")
     # Concatenate all datasets
     return concatenate_datasets(datasets)
 
@@ -83,7 +89,7 @@ def run():
 
     args = parse(RunConfig)
     # add output_or_diff to the run name
-    args.run_name = args.run_name + f"_{''.join(args.dataset_path[0].split('/'))}_{args.hookpoints[0]}_100_random_per_struct"
+    args.run_name = args.run_name + f"_{''.join(args.dataset_path[0].split('/'))}"
 
     dtype = torch.float32
     if args.mixed_precision == "fp16":
@@ -95,47 +101,23 @@ def run():
     # Awkward hack to prevent other ranks from duplicating data preprocessing
     dataset_dict = {}
     if not ddp or rank == 0:
-        for hookpoint in args.hookpoints:
-            # if len(args.dataset_path) > 1:
-            #     dataset = load_datasets_from_dirs(args.dataset_path, hookpoint, dtype)
-            # else:
-            #     dataset = Dataset.load_from_disk(
-            #         os.path.join(args.dataset_path[0], hookpoint), keep_in_memory=False
-            #     )
-            dataset = load_datasets_from_dir_of_dirs(args.dataset_path[0], hookpoint, dtype)
-            dataset.set_format(
-                type="torch",
-                columns=["values"],
-                dtype=dtype,
-            )
-            dataset = dataset.shuffle(args.seed)
-            if limit := args.max_examples:
-                dataset = dataset.select(range(limit))
-            dataset_dict[hookpoint] = dataset
-            print(f"Loaded dataset for {hookpoint}")
-    # NOTE: DDP not tested so far
-    if ddp:
-        dist.barrier()
-        if rank != 0:
-            for hookpoint in args.hookpoints:
-                dataset = Dataset.load_from_disk(
-                    os.path.join(args.dataset_path, hookpoint), keep_in_memory=False
-                )
-                dataset.set_format(
-                    type="torch",
-                    columns=["values", "timestep"],
-                    dtype=dtype,
-                )
-                dataset = dataset.shuffle(args.seed)
-                dataset = dataset.shard(dist.get_world_size(), rank)
-                dataset_dict[hookpoint] = dataset
-                print(f"Loaded dataset for {hookpoint}")
+        dataset = load_datasets_from_dir_of_dirs(os.path.join(args.dataset_path[0], args.hookpoints[0]), dtype)
+        dataset.set_format(
+            type="torch",
+            columns=["values"],
+            dtype=dtype,
+        )
+        dataset = dataset.shuffle(args.seed)
+        if limit := args.max_examples:
+            dataset = dataset.select(range(limit))
+        dataset_dict[args.hookpoints[0]] = dataset
+
 
     # Prevent ranks other than 0 from printing
     with nullcontext() if rank == 0 else redirect_stdout(None):
         trainer = SaeTrainer(args, dataset_dict)
 
-        trainer.fit()
+        trainer.fit(args.max_trainer_steps)
 
 
 if __name__ == "__main__":

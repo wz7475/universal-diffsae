@@ -82,7 +82,7 @@ class TrainConfig(Serializable):
     feature_sampling_window: int = 100
 
     hookpoints: list[str] = list_field()
-    """List of hookpoints to train SAEs on."""
+    """List of hookpoints to train SAEs on - directory name, list only of one directory supported."""
 
     distribute_modules: bool = False
     """Store a single copy of each SAE, instead of copying them across devices."""
@@ -94,6 +94,7 @@ class TrainConfig(Serializable):
     run_name: str | None = None
     wandb_log_frequency: int = 1
     wandb_project: str = "RFDiffSAE"
+    wandb_team: str = "RFDiffSAE"
 
     def __post_init__(self):
         if self.run_name is None:
