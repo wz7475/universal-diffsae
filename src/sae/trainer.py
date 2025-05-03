@@ -41,7 +41,8 @@ class SaeTrainer:
         }
         print(self.saes)
         self.effective_batch_size = self.cfg.effective_batch_size
-        self.batch_size = self.effective_batch_size // self.sample_size
+        # self.batch_size = self.effective_batch_size // self.sample_size
+        self.batch_size = self.cfg.effective_batch_size
         print(f"Batch size: {self.batch_size}")
         self.increment_tokens = (
             self.effective_batch_size
