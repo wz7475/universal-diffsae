@@ -89,7 +89,7 @@ def run():
 
     args = parse(RunConfig)
     # add output_or_diff to the run name
-    args.run_name = args.run_name + f"_{''.join(args.dataset_path[0].split('/'))}"
+    args.run_name = args.run_name + f"lr{args.lr}_{''.join(args.dataset_path[0].split('/'))}_{args.hookpoints[0]}"
 
     dtype = torch.float32
     if args.mixed_precision == "fp16":
