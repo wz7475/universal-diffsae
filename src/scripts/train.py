@@ -8,10 +8,11 @@ from contextlib import nullcontext, redirect_stdout
 from dataclasses import dataclass
 from typing import Optional
 
+from src.tools.dataset import load_datasets_from_dir_of_dirs
+
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 import torch
 import torch.distributed as dist
-from datasets import Dataset, IterableDataset
 from simple_parsing import parse
 
 from src.sae.config import TrainConfig
@@ -31,35 +32,6 @@ class RunConfig(TrainConfig):
     num_epochs: int = 1
     n_random_activation: Optional[int] = None
     max_trainer_steps: Optional[int] = None
-
-def create_iterable_dataset(paths: list[str], dtype) -> IterableDataset:
-    def gen(paths, dtype):
-        for path in paths:
-            ds = Dataset.load_from_disk(path)
-            ds.set_format(
-            type="torch",
-            columns=["values"],
-            dtype=dtype
-        )
-            for example in ds:
-                yield example
-
-    return IterableDataset.from_generator(generator=gen, gen_kwargs={"paths": paths, "dtype": dtype})
-
-
-
-def load_datasets_from_dir_of_dirs(base_dir, dtype=torch.float32, random_n_activations_from_dataset= None):
-
-    print(f"loading iterable dataset {base_dir}")
-
-    all_directories = os.listdir(base_dir)
-    shards_paths = []
-    for timestep_dir_name in sorted(all_directories):
-        timestrep_dir = os.path.join(base_dir, timestep_dir_name)
-        for design_der_name in os.listdir(timestrep_dir):
-            design_dir = os.path.join(timestrep_dir, design_der_name)
-            shards_paths.append(design_dir)
-    return create_iterable_dataset(shards_paths, dtype)
 
 
 def run():
@@ -88,7 +60,7 @@ def run():
     # Awkward hack to prevent other ranks from duplicating data preprocessing
     dataset_dict = {}
     if not ddp or rank == 0:
-        dataset = load_datasets_from_dir_of_dirs(os.path.join(args.dataset_path[0], args.hookpoints[0]), dtype)
+        dataset = load_datasets_from_dir_of_dirs(os.path.join(args.dataset_path[0], args.hookpoints[0]), dtype, columns=["values"])
         dataset = dataset.shuffle(args.seed)
         if limit := args.max_examples:
             dataset = dataset.select(range(limit))
