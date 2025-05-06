@@ -24,14 +24,14 @@ class SaeTrainer:
     def __init__(self, cfg: TrainConfig, dataset_dict: dict[str, Dataset]):
         self.cfg = cfg
         self.dataset_dict = dataset_dict
-        self.num_examples = len(dataset_dict[list(dataset_dict.keys())[0]])
+        # self.num_examples = len(dataset_dict[list(dataset_dict.keys())[0]])
         input_widths = {
-            hook: dataset[0]["values"].shape[-1]
+            hook: next(iter(dataset))["values"].shape[-1]
             for hook, dataset in self.dataset_dict.items()
         }
-        self.sample_size = dataset_dict[list(dataset_dict.keys())[0]][0][
-            "values"
-        ].shape[-1]
+        # self.sample_size = dataset_dict[list(dataset_dict.keys())[0]][0][
+        #     "values"
+        # ].shape[-1]
         self.distribute_modules()
         device = torch.device(cfg.device)
 
@@ -86,12 +86,7 @@ class SaeTrainer:
             for name, sae in self.saes.items()
         }
         self.optimizer = Adam(pgs)
-        self.lr_scheduler = get_scheduler(
-            name=cfg.lr_scheduler,
-            optimizer=self.optimizer,
-            num_warmup_steps=cfg.lr_warmup_steps,
-            num_training_steps=(self.num_examples // self.batch_size) * cfg.num_epochs,
-        )
+
 
     def load_state(self, path: str):
         """Load the trainer state from disk."""
@@ -108,14 +103,10 @@ class SaeTrainer:
             f"\033[92mResuming training at step {self.global_step} from '{path}'\033[0m"
         )
 
-        lr_state = torch.load(
-            f"{path}/lr_scheduler.pt", map_location=device, weights_only=True
-        )
         opt_state = torch.load(
             f"{path}/optimizer.pt", map_location=device, weights_only=True
         )
         self.optimizer.load_state_dict(opt_state)
-        self.lr_scheduler.load_state_dict(lr_state)
 
         for name, sae in self.saes.items():
             load_model(sae, f"{path}/{name}/sae.safetensors", device=str(device))
@@ -147,7 +138,7 @@ class SaeTrainer:
         )
         print(f"Number of SAE parameters: {num_sae_params:_}")
 
-        num_batches = (self.num_examples // self.batch_size) * self.cfg.num_epochs
+        num_batches = (100000000) * self.cfg.num_epochs
 
         device = torch.device(self.cfg.device)
         dataloaders = {
@@ -165,7 +156,7 @@ class SaeTrainer:
             desc="Training",
             disable=not rank_zero,
             initial=self.global_step,
-            total=num_batches,
+            # total=num_batches,
         )
 
         did_fire = {
@@ -308,7 +299,6 @@ class SaeTrainer:
 
                     self.optimizer.step()
                     self.optimizer.zero_grad()
-                    self.lr_scheduler.step()
 
                     ###############
                     with torch.no_grad():
@@ -561,7 +551,6 @@ class SaeTrainer:
                 sae.save_to_disk(f"{path}/{hook}")
 
         if rank_zero:
-            torch.save(self.lr_scheduler.state_dict(), f"{path}/lr_scheduler.pt")
             torch.save(self.optimizer.state_dict(), f"{path}/optimizer.pt")
             torch.save(
                 {

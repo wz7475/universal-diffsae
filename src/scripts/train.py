@@ -3,7 +3,6 @@ Train sparse autoencoders on activations from a diffusion model.
 """
 
 import os
-import random
 import sys
 from contextlib import nullcontext, redirect_stdout
 from dataclasses import dataclass
@@ -12,7 +11,7 @@ from typing import Optional
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 import torch
 import torch.distributed as dist
-from datasets import Dataset, concatenate_datasets
+from datasets import Dataset, IterableDataset
 from simple_parsing import parse
 
 from src.sae.config import TrainConfig
@@ -33,46 +32,34 @@ class RunConfig(TrainConfig):
     n_random_activation: Optional[int] = None
     max_trainer_steps: Optional[int] = None
 
+def create_iterable_dataset(paths: list[str], dtype) -> IterableDataset:
+    def gen(paths, dtype):
+        for path in paths:
+            ds = Dataset.load_from_disk(path)
+            ds.set_format(
+            type="torch",
+            columns=["values"],
+            dtype=dtype
+        )
+            for example in ds:
+                yield example
+
+    return IterableDataset.from_generator(generator=gen, gen_kwargs={"paths": paths, "dtype": dtype})
+
+
 
 def load_datasets_from_dir_of_dirs(base_dir, dtype=torch.float32, random_n_activations_from_dataset= None):
-    """
-    Load and concatenate datasets from multiple directories.
 
-    Args:
-        base_dirs (list[str]): List of base directory paths containing the datasets
-        hookpoint (str): Name of the hookpoint directory
-        dtype: Data type for the tensors (default: torch.float32)
-        random_n_activations_from_dataset (int | None): sample n random activation from dataset
-
-    Returns:
-        Dataset: Concatenated dataset
-    """
-    datasets = []
-    print(f"Concatenating datasets from {base_dir}")
+    print(f"loading iterable dataset {base_dir}")
 
     all_directories = os.listdir(base_dir)
-    idx = 1
+    shards_paths = []
     for timestep_dir_name in sorted(all_directories):
         timestrep_dir = os.path.join(base_dir, timestep_dir_name)
         for design_der_name in os.listdir(timestrep_dir):
             design_dir = os.path.join(timestrep_dir, design_der_name)
-            dataset = Dataset.load_from_disk(
-               design_dir, keep_in_memory=False
-            )
-
-            # Set format for each dataset
-            dataset.set_format(
-                type="torch",
-                columns=["values"],
-                dtype=dtype,
-            )
-            # dataset = dataset.select(range(min(1000, len(dataset))))
-            if random_n_activations_from_dataset:
-                dataset = dataset.select(random.sample(range(0, len(dataset)), random_n_activations_from_dataset))
-            datasets.append(dataset)
-        print(f"processed {timestrep_dir}")
-    # Concatenate all datasets
-    return concatenate_datasets(datasets)
+            shards_paths.append(design_dir)
+    return create_iterable_dataset(shards_paths, dtype)
 
 
 def run():
@@ -102,11 +89,6 @@ def run():
     dataset_dict = {}
     if not ddp or rank == 0:
         dataset = load_datasets_from_dir_of_dirs(os.path.join(args.dataset_path[0], args.hookpoints[0]), dtype)
-        dataset.set_format(
-            type="torch",
-            columns=["values"],
-            dtype=dtype,
-        )
         dataset = dataset.shuffle(args.seed)
         if limit := args.max_examples:
             dataset = dataset.select(range(limit))
