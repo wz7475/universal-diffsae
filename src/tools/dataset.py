@@ -1,14 +1,27 @@
 import os
-from typing import Tuple
 import random
 
 import torch
 from datasets import IterableDataset, Dataset, concatenate_datasets
-from sklearn.model_selection import train_test_split
 
 
-def remove_dead_features(ds: Dataset | IterableDataset, feature_name: str, masking_value: int = 0,
-                         threshold: float = 1e-3) -> Dataset | IterableDataset:
+def normalize_ds(ds: torch.Tensor) -> torch.Tensor:
+    min_v = torch.min(ds, dim=0)[0]
+    max_v = torch.max(ds, dim=0)[0]
+    return (ds - min_v) / (max_v - min_v)
+
+def remove_dead_feature_tensor(ds: torch.Tensor, masking_value: int = 0,
+                              threshold: float = 1e-3) -> torch.Tensor:
+    max_v = torch.max(ds, dim=0)[0]
+    mask = max_v > threshold
+    ds[:, mask] = masking_value
+    return ds
+
+def get_numerical_target_ovo(labels: list[str], target_label: str):
+    return torch.tensor([1 if element  == target_label else 0 for element in labels], dtype=torch.float32)
+
+def remove_dead_features_loop(ds: Dataset | IterableDataset, feature_name: str, masking_value: int = 0,
+                              threshold: float = 1e-3) -> Dataset | IterableDataset:
     # find indices where at least one sample have value greater than threshold
     mask = torch.tensor([False] * next(iter(ds))[feature_name].shape[0])
     for example in ds:
@@ -67,13 +80,3 @@ def get_shards_paths(base_dir):
 def load_datasets_from_dir_of_dirs(base_dir, dtype, columns: list[str]):
     print(f"loading iterable dataset {base_dir}")
     return create_iterable_dataset(get_shards_paths(base_dir), dtype, columns)
-
-
-def create_train_test_iterable_datasets(base_dir, dtype, columns: list[str], test_size=0.2) -> Tuple[
-    IterableDataset, IterableDataset]:
-    shards_paths = get_shards_paths(base_dir)
-    train_shards, test_shards = train_test_split(shards_paths, test_size=test_size)
-    return (
-        create_iterable_dataset(train_shards, dtype, columns),
-        create_iterable_dataset(test_shards, dtype, columns),
-    )

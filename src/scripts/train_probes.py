@@ -7,31 +7,25 @@ from lightning.pytorch.loggers import WandbLogger
 from torch.utils.data import DataLoader
 
 from src.probes.probes import SimpleNetwork
-from src.tools.dataset import create_train_test_iterable_datasets, load_ds_from_dirs, remove_dead_features
-
-
-def get_data_loaders_using_iterable_ds(path, test_size, feature_type, target_label, train_batch_size, test_batch_size):
-    print("WARNING: dead feature removal not implemented yet!!! -----------------------------")
-    train_ds, test_ds = create_train_test_iterable_datasets(path, torch.float32, columns=["values", feature_type],
-                                                            test_size=test_size)
-    train_ds = train_ds.map(
-        lambda example: {feature_type: torch.tensor((example[feature_type] == target_label), dtype=torch.float32)})
-    test_ds = test_ds.map(
-        lambda example: {feature_type: torch.tensor((example[feature_type] == target_label), dtype=torch.float32)})
-
-    train_dataloader = DataLoader(train_ds, batch_size=train_batch_size)
-    test_dataloader = DataLoader(test_ds, batch_size=test_batch_size)
-    return train_dataloader, test_dataloader
+from src.tools.dataset import load_ds_from_dirs, normalize_ds, remove_dead_feature_tensor, get_numerical_target_ovo
 
 
 def get_data_loaders_using_vanilla_ds(path, test_size, feature_type, target_label, train_batch_size, test_batch_size,
                                       n_shard_per_timestep):
     ds = load_ds_from_dirs(path, columns=["values", feature_type], dtype=torch.float32,
                            n_shards_per_timestep=n_shard_per_timestep)
-    ds = remove_dead_features(ds, "values")
-    print("Removed dead features")
-    ds = ds.map(
-        lambda example: {feature_type: torch.tensor((example[feature_type] == target_label), dtype=torch.float32)}
+    latents: torch.Tensor = ds["values"]
+    latents = remove_dead_feature_tensor(latents)
+    latents = normalize_ds(latents)
+    labels = get_numerical_target_ovo(ds[feature_type], target_label)
+    ds = ds.from_dict({
+        "values": latents,
+        feature_type: labels
+    })
+    ds.set_format(
+        type="torch",
+        columns=["values", feature_type],
+        dtype=torch.float32
     )
     ds_dict = ds.train_test_split(test_size=test_size)
     train_dataloader = DataLoader(ds_dict["train"], batch_size=train_batch_size)
@@ -55,15 +49,10 @@ def main(
         n_shard_per_timestep,
 ):
     path = os.path.join(base_dir, "latents", sae_type)
-    if n_shard_per_timestep:
-        print(f"n_shard_per_timestep given {n_shard_per_timestep} - using vanilla Dataset")
-        train_dataloader, test_dataloader = get_data_loaders_using_vanilla_ds(path, test_size, feature_type,
-                                                                              target_label, train_batch_size,
-                                                                              test_batch_size, n_shard_per_timestep)
-    else:
-        print("n_shard_per_timestep not given - using IterableDataset")
-        train_dataloader, test_dataloader = get_data_loaders_using_iterable_ds(path, test_size, feature_type, target_label,
-                                                                               train_batch_size, test_batch_size)
+    print(f"n_shard_per_timestep given {n_shard_per_timestep} - using vanilla Dataset")
+    train_dataloader, test_dataloader = get_data_loaders_using_vanilla_ds(path, test_size, feature_type,
+                                                                          target_label, train_batch_size,
+                                                                          test_batch_size, n_shard_per_timestep)
 
     os.environ["CUDA_VISIBLE_DEVICES"] = cuda_devices
 
