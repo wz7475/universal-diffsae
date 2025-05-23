@@ -76,7 +76,7 @@ if __name__ == "__main__":
     parser.add_argument("--wandb_project", type=str, default="SAE_latents")
     parser.add_argument("--max_epochs", type=int, default=5)
     parser.add_argument("--log_every_n_steps", type=int, default=10)
-    parser.add_argument("--lr", type=float, default=0.01)
+    parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--n_shards_per_timestep", type=int)
     args = parser.parse_args()
     main(
