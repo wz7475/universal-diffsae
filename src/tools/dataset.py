@@ -3,22 +3,22 @@ import random
 
 import torch
 from datasets import IterableDataset, Dataset, concatenate_datasets
+from sklearn.preprocessing import MinMaxScaler
 
-
-def normalize_ds(ds: torch.Tensor) -> torch.Tensor:
-    min_v = torch.min(ds, dim=0)[0]
-    max_v = torch.max(ds, dim=0)[0]
-    return (ds - min_v) / (max_v - min_v)
 
 def remove_dead_feature_tensor(ds: torch.Tensor, masking_value: int = 0,
-                              threshold: float = 1e-3) -> torch.Tensor:
+                               threshold: float = 1e-3) -> torch.Tensor:
+    print("removing dead features")
     max_v = torch.max(ds, dim=0)[0]
-    mask = max_v > threshold
+    mask = max_v < threshold
     ds[:, mask] = masking_value
     return ds
 
+
 def get_numerical_target_ovo(labels: list[str], target_label: str):
-    return torch.tensor([1 if element  == target_label else 0 for element in labels], dtype=torch.float32)
+    print("getting numerical target")
+    return torch.tensor([1 if element == target_label else 0 for element in labels], dtype=torch.float32)
+
 
 def remove_dead_features_loop(ds: Dataset | IterableDataset, feature_name: str, masking_value: int = 0,
                               threshold: float = 1e-3) -> Dataset | IterableDataset:
@@ -51,6 +51,28 @@ def load_ds_from_dirs(path: str, columns, dtype, n_shards_per_timestep: int | No
     return concatenate_datasets(datasets)
 
 
+def get_normalized_latents(ds: Dataset) -> torch.Tensor:
+    latents: torch.Tensor = ds["values"]
+    latents = remove_dead_feature_tensor(latents)
+    latents = torch.from_numpy(MinMaxScaler().fit_transform(latents))
+    return latents
+
+
+def get_dataset_latents_target_label(ds: Dataset, feature_type: str, target_label: str) -> Dataset:
+    latents = get_normalized_latents(ds)
+    labels = get_numerical_target_ovo(ds[feature_type], target_label)
+    ds = ds.from_dict({
+        "values": latents,
+        target_label: labels
+    })
+    ds.set_format(
+        type="torch",
+        columns=["values", target_label],
+        dtype=torch.float32
+    )
+    return ds
+
+
 def create_iterable_dataset(paths: list[str], dtype, columns: list[str]) -> IterableDataset:
     def gen(paths, dtype):
         for path in paths:
@@ -77,6 +99,6 @@ def get_shards_paths(base_dir):
     return shards_paths
 
 
-def load_datasets_from_dir_of_dirs(base_dir, dtype, columns: list[str]):
+def load_datasets_from_dir_of_dirs(base_dir, dtype, columns: list[str]) -> IterableDataset:
     print(f"loading iterable dataset {base_dir}")
     return create_iterable_dataset(get_shards_paths(base_dir), dtype, columns)

@@ -7,26 +7,14 @@ from lightning.pytorch.loggers import WandbLogger
 from torch.utils.data import DataLoader
 
 from src.probes.probes import SimpleNetwork
-from src.tools.dataset import load_ds_from_dirs, normalize_ds, remove_dead_feature_tensor, get_numerical_target_ovo
+from src.tools.dataset import get_dataset_latents_target_label, load_ds_from_dirs
 
 
 def get_data_loaders_using_vanilla_ds(path, test_size, feature_type, target_label, train_batch_size, test_batch_size,
                                       n_shard_per_timestep):
-    ds = load_ds_from_dirs(path, columns=["values", feature_type], dtype=torch.float32,
-                           n_shards_per_timestep=n_shard_per_timestep)
-    latents: torch.Tensor = ds["values"]
-    latents = remove_dead_feature_tensor(latents)
-    latents = normalize_ds(latents)
-    labels = get_numerical_target_ovo(ds[feature_type], target_label)
-    ds = ds.from_dict({
-        "values": latents,
-        feature_type: labels
-    })
-    ds.set_format(
-        type="torch",
-        columns=["values", feature_type],
-        dtype=torch.float32
-    )
+    raw_ds = load_ds_from_dirs(path, columns=["values", feature_type], dtype=torch.float32,
+                               n_shards_per_timestep=n_shard_per_timestep)
+    ds = get_dataset_latents_target_label(raw_ds, feature_type, target_label)
     ds_dict = ds.train_test_split(test_size=test_size)
     train_dataloader = DataLoader(ds_dict["train"], batch_size=train_batch_size)
     test_dataloader = DataLoader(ds_dict["test"], batch_size=test_batch_size)
@@ -65,7 +53,7 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train SimpleNetwork on SAE latents")
-    parser.add_argument("--base_dir", type=str, default="/data/wzarzecki/ds_sae_latents/old/ds_sae_latents_50x")
+    parser.add_argument("--base_dir", type=str, default="/home/wzarzecki/ds_sae_latents_1600x")
     parser.add_argument("--sae_type", type=str, default="pair")
     parser.add_argument("--feature_type", type=str, default="subcellular")
     parser.add_argument("--target_label", type=str, default="Cytoplasm")
@@ -77,7 +65,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_epochs", type=int, default=5)
     parser.add_argument("--log_every_n_steps", type=int, default=10)
     parser.add_argument("--lr", type=float, default=0.001)
-    parser.add_argument("--n_shards_per_timestep", type=int)
+    parser.add_argument("--n_shards_per_timestep", type=int, default=None)
     args = parser.parse_args()
     main(
         args.base_dir,
