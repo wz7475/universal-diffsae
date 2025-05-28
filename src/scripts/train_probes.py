@@ -7,13 +7,13 @@ from lightning.pytorch.loggers import WandbLogger
 from torch.utils.data import DataLoader
 
 from src.probes.probes import SimpleNetwork
-from src.tools.dataset import get_dataset_latents_target_label, load_ds_from_dirs
+from src.tools.dataset import get_dataset_latents_target_label, load_ds_from_dirs_flattening_timesteps
 
 
 def get_data_loaders_using_vanilla_ds(path, test_size, feature_type, target_label, train_batch_size, test_batch_size,
                                       n_shard_per_timestep):
-    raw_ds = load_ds_from_dirs(path, columns=["values", feature_type], dtype=torch.float32,
-                               n_shards_per_timestep=n_shard_per_timestep)
+    raw_ds = load_ds_from_dirs_flattening_timesteps(path, columns=["values", feature_type], dtype=torch.float32,
+                                                    n_shards_per_timestep=n_shard_per_timestep)
     ds = get_dataset_latents_target_label(raw_ds, feature_type, target_label)
     ds_dict = ds.train_test_split(test_size=test_size)
     train_dataloader = DataLoader(ds_dict["train"], batch_size=train_batch_size)
