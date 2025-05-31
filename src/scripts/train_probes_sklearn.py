@@ -15,7 +15,7 @@ def train_model(ds_path):
     columns.remove("values")
     label = columns[0]
     y = ds[label]
-    model = LogisticRegression(solver="newton-cholesky")
+    model = LogisticRegression(solver="newton-cholesky", fit_intercept=False)
     model.fit(X, y)
     probs = model.predict_proba(X)
     auc_roc = roc_auc_score(y, probs[:, 1])
@@ -24,7 +24,7 @@ def train_model(ds_path):
     positive_class_ratio = bin_count[1] / bin_count.sum()
     return positive_class_ratio, auc_roc, ap, model
 
-def train_regressions_flat_timesteps(base_dir: str, csv_path: str, weights_dir: str = None):
+def train_regressions_flat_timesteps(base_dir: str, csv_path: str, weights_dir: str = None, biases_dir: str = None):
     report = "REPORT\n"
     with open(csv_path, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
@@ -42,9 +42,15 @@ def train_regressions_flat_timesteps(base_dir: str, csv_path: str, weights_dir: 
                 weights_path = os.path.join(weights_dir, f"{label_dir_name}_coef.npy")
                 import numpy as np
                 np.save(weights_path, model.coef_)
+            # Save model biases
+            if biases_dir:
+                os.makedirs(biases_dir, exist_ok=True)
+                biases_path = os.path.join(biases_dir, f"{label_dir_name}_bias.npy")
+                import numpy as np
+                np.save(biases_path, model.intercept_)
     print(report)
 
-def train_regressions_per_timestep(base_dir: str, csv_path: str, weights_dir: str = None):
+def train_regressions_per_timestep(base_dir: str, csv_path: str, weights_dir: str = None, biases_dir: str = None):
     report = "REPORT\n"
     with open(csv_path, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
@@ -64,6 +70,12 @@ def train_regressions_per_timestep(base_dir: str, csv_path: str, weights_dir: st
                     weights_path = os.path.join(weights_dir, f"{label_dir_name}_{timestep_dir}_coef.npy")
                     import numpy as np
                     np.save(weights_path, model.coef_)
+                # Save model biases
+                if biases_dir:
+                    os.makedirs(biases_dir, exist_ok=True)
+                    biases_path = os.path.join(biases_dir, f"{label_dir_name}_{timestep_dir}_bias.npy")
+                    import numpy as np
+                    np.save(biases_path, model.intercept_)
     print(report)
 
 if __name__ == "__main__":
@@ -72,9 +84,10 @@ if __name__ == "__main__":
     parser.add_argument("--per_timestep", action="store_true", default=False)
     parser.add_argument("--csv_path", type=str, default=None, help="Path to output CSV file")
     parser.add_argument("--weights_dir", type=str, default=None, help="Directory to save model coefficients")
+    parser.add_argument("--biases_dir", type=str, default=None, help="Directory to save model biases")
     args = parser.parse_args()
     csv_path = args.csv_path if args.csv_path else os.path.join(args.input, "probes_results.csv")
     if args.per_timestep:
-        train_regressions_per_timestep(args.input, csv_path, args.weights_dir)
+        train_regressions_per_timestep(args.input, csv_path, args.weights_dir, args.biases_dir)
     else:
-        train_regressions_flat_timesteps(args.input, csv_path, args.weights_dir)
+        train_regressions_flat_timesteps(args.input, csv_path, args.weights_dir, args.biases_dir)
