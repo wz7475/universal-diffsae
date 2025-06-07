@@ -1,15 +1,18 @@
 import argparse
 import os
+from typing import Tuple
 
 import numpy as np
 import torch
 from torch import Tensor
 
 
-def get_top_k_indices(coef: np.ndarray, top_k: int) -> Tensor:
+def get_top_k_indices(coef: np.ndarray, top_k: int) -> Tuple[Tensor, Tensor]:
     coefs_torch = torch.from_numpy(coef[0]).float()
-    return torch.topk(coefs_torch, k=top_k).indices
-
+    abs_coefs = torch.abs(coefs_torch)
+    indices = torch.topk(abs_coefs, k=top_k).indices
+    values = coefs_torch[indices]
+    return values, indices
 
 def process_coefs_dir(
     dir_with_coefs: str,
@@ -22,9 +25,9 @@ def process_coefs_dir(
     for filename in os.listdir(dir_with_coefs):
         file_path = os.path.join(dir_with_coefs, filename)
         coefs = np.load(file_path)
-        indices = get_top_k_indices(coefs, top_k)
+        values, indices = get_top_k_indices(coefs, top_k)
         torch.save(
-            indices,
+            (values, indices),
             os.path.join(output_dir, filename.replace(suffix_to_remove, suffix_to_add)),
         )
 
